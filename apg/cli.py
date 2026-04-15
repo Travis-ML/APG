@@ -347,5 +347,124 @@ def policy_diff(ctx: click.Context, staged_dir: str | None) -> None:
             click.echo(f"  (new file, {len(staged_lines)} lines)")
 
 
+@cli.group()
+def discover() -> None:
+    """Auto-discover MCP tools and generate mappings."""
+
+
+@discover.command("from-file")
+@click.argument("tools_file", type=click.Path(exists=True, path_type=Path))
+@click.option("--output", "-o", default=None, type=click.Path(path_type=Path),
+              help="Output file for generated mappings. Prints to stdout if omitted.")
+@click.option("--merge", is_flag=True, default=False,
+              help="Merge with existing mappings file, adding only new tools.")
+@click.pass_context
+def discover_from_file(ctx: click.Context, tools_file: Path, output: Path | None, merge: bool) -> None:
+    """Generate tool mappings from an MCP tools/list JSON file.
+
+    The file should contain the response from an MCP tools/list call,
+    either as {"tools": [...]} or as a plain array of tool objects.
+    """
+    from apg.discover import (
+        ToolDiscovery,
+        Confidence,
+        generate_mappings_yaml,
+        load_tools_from_file,
+    )
+
+    config = ctx.obj["config"]
+
+    existing: dict = {}
+    if merge:
+        mappings_path = Path(config.mappings_file)
+        if mappings_path.exists():
+            raw = yaml.safe_load(mappings_path.read_text(encoding="utf-8")) or {}
+            existing = raw.get("mappings", {})
+            click.echo(f"Merging with {len(existing)} existing mappings from {mappings_path}")
+
+    tools = load_tools_from_file(tools_file)
+    click.echo(f"Loaded {len(tools)} tools from {tools_file}")
+
+    discovery = ToolDiscovery(existing_mappings=existing)
+    discovered = discovery.discover_from_tools_list(tools)
+
+    if not discovered:
+        click.echo("No new tools to map (all already have existing mappings).")
+        return
+
+    high = sum(1 for d in discovered if d.confidence == Confidence.HIGH)
+    medium = sum(1 for d in discovered if d.confidence == Confidence.MEDIUM)
+    low = sum(1 for d in discovered if d.confidence == Confidence.LOW)
+    review = sum(1 for d in discovered if d.needs_review)
+
+    click.echo(f"\nClassified {len(discovered)} new tools:")
+    click.echo(f"  {high} high confidence (ToolAnnotations)")
+    click.echo(f"  {medium} medium confidence (name heuristics)")
+    click.echo(f"  {low} low confidence (needs review)")
+    if review > 0:
+        click.echo(f"\n  {review} tool(s) flagged for manual review:")
+        for d in discovered:
+            if d.needs_review:
+                click.echo(f"    - {d.tool_name}: {d.review_reason[:80]}")
+
+    mappings_yaml = generate_mappings_yaml(discovered)
+
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(mappings_yaml, encoding="utf-8")
+        click.echo(f"\nMappings written to: {output}")
+    else:
+        click.echo("\n--- Generated Mappings ---")
+        click.echo(mappings_yaml)
+
+
+@discover.command("from-gateway")
+@click.option("--url", required=True, help="AgentGateway URL (e.g. http://localhost:3000)")
+@click.option("--mcp-path", default="/mcp", help="MCP endpoint path on AgentGateway.")
+@click.option("--output", "-o", default=None, type=click.Path(path_type=Path),
+              help="Output file for generated mappings.")
+@click.pass_context
+def discover_from_gateway(ctx: click.Context, url: str, mcp_path: str, output: Path | None) -> None:
+    """Fetch tools from a running AgentGateway and generate mappings."""
+    import asyncio
+    from apg.discover import (
+        ToolDiscovery,
+        fetch_tools_from_gateway,
+        generate_mappings_yaml,
+    )
+
+    click.echo(f"Connecting to {url}{mcp_path}...")
+
+    try:
+        tools = asyncio.run(fetch_tools_from_gateway(url, mcp_path))
+    except Exception as exc:
+        click.echo(f"Failed to fetch tools: {exc}", err=True)
+        raise SystemExit(1)
+
+    click.echo(f"Fetched {len(tools)} tools from AgentGateway")
+
+    config = ctx.obj["config"]
+    existing: dict = {}
+    mappings_path = Path(config.mappings_file)
+    if mappings_path.exists():
+        raw = yaml.safe_load(mappings_path.read_text(encoding="utf-8")) or {}
+        existing = raw.get("mappings", {})
+
+    discovery = ToolDiscovery(existing_mappings=existing)
+    discovered = discovery.discover_from_tools_list(tools)
+
+    if not discovered:
+        click.echo("No new tools to map.")
+        return
+
+    mappings_yaml = generate_mappings_yaml(discovered)
+
+    if output:
+        output.write_text(mappings_yaml, encoding="utf-8")
+        click.echo(f"Mappings written to: {output}")
+    else:
+        click.echo(mappings_yaml)
+
+
 if __name__ == "__main__":
     cli()
