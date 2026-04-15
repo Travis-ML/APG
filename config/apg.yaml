@@ -1,0 +1,63 @@
+gateway:
+  host: "0.0.0.0"
+  port: 9001
+  mode: "enforce"          # enforce | audit | observe
+  default: "deny"          # deny | allow (deny is the only sane default)
+
+identity:
+  method: "jwt"            # jwt | header | passthrough
+  header: "X-Agent-Id"     # for header method
+  jwt_secret_file: ""      # path to secret file, or empty for HMAC from env
+  jwt_algorithms: ["HS256", "RS256"]
+
+cedar:
+  policy_dir: "/etc/apg/policies"
+  schema_file: ""          # optional schema file
+  hot_reload: true
+  reload_interval_seconds: 30
+
+normalizer:
+  mappings_file: "config/tool_mappings.yaml"
+
+observe:
+  disclaimer: >
+    Observe mode is a policy generation tool, not an operating mode.
+    It records all tool calls without enforcement. Switch to 'enforce'
+    or 'audit' after generating and reviewing policies.
+  mode: "auto"             # full | delta | auto (auto = delta when policies exist)
+  data_dir: "/var/apg/observe"
+  auto_disable_after: null  # optional, e.g. "168h"
+  reminder_interval_hours: 24
+  generalization:
+    file_collapse_threshold: 5
+    max_wildcard_depth: 1
+    extension_grouping: true
+    command_prefix_tokens: 1
+    compound_command_prefixes:
+      - "pip install"
+      - "npm install"
+      - "yarn add"
+      - "cargo build"
+      - "go build"
+      - "docker build"
+      - "python -m"
+    never_wildcard:
+      - "*.env"
+      - "*.key"
+      - "*.pem"
+      - "*.secret"
+      - "**/secrets/**"
+    never_permit_commands:
+      - "rm -rf"
+      - "sudo"
+      - "chmod"
+      - "chown"
+      - "curl * | sh"
+      - "curl * | bash"
+      - "wget * | sh"
+
+audit:
+  enabled: true
+  format: "jsonl"
+  output: "/var/log/apg/audit.log"
+  redact_keys: ["password", "token", "secret", "key", "credential", "api_key"]

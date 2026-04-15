@@ -1,0 +1,22 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# APG runtime data
+/data/
+/var/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

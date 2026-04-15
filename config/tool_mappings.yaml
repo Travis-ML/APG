@@ -1,0 +1,156 @@
+# Tool Mappings Configuration
+# Maps MCP tool names to canonical action types and resource extraction rules.
+# Add new tool servers by extending this file. No code changes required.
+
+mappings:
+  # Filesystem tools (common across many MCP servers)
+  read_file:
+    action_type: read
+    resource_field: path
+    resource_prefix: "file:"
+    category: filesystem
+
+  write_file:
+    action_type: write
+    resource_field: path
+    resource_prefix: "file:"
+    category: filesystem
+
+  create_file:
+    action_type: write
+    resource_field: path
+    resource_prefix: "file:"
+    category: filesystem
+
+  edit_file:
+    action_type: write
+    resource_field: path
+    resource_prefix: "file:"
+    category: filesystem
+
+  delete_file:
+    action_type: delete
+    resource_field: path
+    resource_prefix: "file:"
+    category: filesystem
+
+  list_directory:
+    action_type: read
+    resource_field: path
+    resource_prefix: "dir:"
+    category: filesystem
+
+  search_files:
+    action_type: read
+    resource_field: pattern
+    resource_prefix: "pattern:"
+    category: filesystem
+
+  # Shell / execution tools
+  bash:
+    action_type: execute
+    resource_field: command
+    resource_prefix: "shell:"
+    category: shell
+    risk_escalation:
+      - pattern: "rm -rf"
+        risk: critical
+      - pattern: "rm -r"
+        risk: high
+      - pattern: "sudo"
+        risk: high
+      - pattern: "chmod"
+        risk: high
+      - pattern: "chown"
+        risk: high
+      - pattern: "curl .* \\| (sh|bash)"
+        risk: critical
+      - pattern: "wget .* \\| (sh|bash)"
+        risk: critical
+      - pattern: "mkfs"
+        risk: critical
+      - pattern: "dd if="
+        risk: critical
+      - pattern: "> /dev/"
+        risk: critical
+
+  run_command:
+    action_type: execute
+    resource_field: command
+    resource_prefix: "shell:"
+    category: shell
+    risk_escalation:
+      - pattern: "rm -rf"
+        risk: critical
+      - pattern: "sudo"
+        risk: high
+
+  # Browser tools
+  navigate:
+    action_type: read
+    resource_field: url
+    resource_prefix: "url:"
+    category: browser
+
+  screenshot:
+    action_type: read
+    resource_field: url
+    resource_prefix: "url:"
+    category: browser
+
+  click:
+    action_type: execute
+    resource_field: selector
+    resource_prefix: "dom:"
+    category: browser
+
+  fill_form:
+    action_type: write
+    resource_field: selector
+    resource_prefix: "dom:"
+    category: browser
+
+  # API tools
+  http_request:
+    action_type: execute
+    resource_field: url
+    resource_prefix: "api:"
+    category: api
+
+  fetch_url:
+    action_type: read
+    resource_field: url
+    resource_prefix: "url:"
+    category: api
+
+  # Data tools
+  query_database:
+    action_type: read
+    resource_field: query
+    resource_prefix: "sql:"
+    category: data
+    risk_escalation:
+      - pattern: "DROP"
+        risk: critical
+      - pattern: "DELETE FROM"
+        risk: high
+      - pattern: "TRUNCATE"
+        risk: critical
+      - pattern: "ALTER"
+        risk: high
+      - pattern: "UPDATE"
+        risk: medium
+
+  insert_data:
+    action_type: write
+    resource_field: table
+    resource_prefix: "table:"
+    category: data
+
+# Default for unknown tools
+default:
+  action_type: unknown
+  resource_field: null
+  resource_prefix: "unknown:"
+  category: unknown
+  risk_level: medium
